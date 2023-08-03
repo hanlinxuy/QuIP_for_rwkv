@@ -77,7 +77,6 @@ class BoolQ(Task):
         return " " + yesno(doc["label"])
 
     def construct_requests(self, doc, ctx):
-
         ll_yes, _ = rf.loglikelihood(ctx, " yes")
         ll_no, _ = rf.loglikelihood(ctx, " no")
 
@@ -130,11 +129,7 @@ class CommitmentBank(Task):
         # True = entailment
         # False = contradiction
         # Neither = neutral
-        return " {}".format({
-            0: "True",
-            1: "False",
-            2: "Neither"
-        }[doc["label"]])
+        return " {}".format({0: "True", 1: "False", 2: "Neither"}[doc["label"]])
 
     def construct_requests(self, doc, ctx):
         ll_true, _ = rf.loglikelihood(ctx, " True")
@@ -259,8 +254,7 @@ class MultiRC(Task):
         return f"{doc['paragraph']}\nQuestion: {doc['question']}\nAnswer:"
 
     def doc_to_target(self, doc):
-        return " " + self.format_answer(answer=doc["answer"],
-                                        label=doc["label"])
+        return " " + self.format_answer(answer=doc["answer"], label=doc["label"])
 
     @staticmethod
     def format_answer(answer, label):
@@ -326,8 +320,7 @@ class ReCoRD(Task):
         }
 
     def doc_to_text(self, doc):
-        initial_text, *highlights = doc["passage"].strip().split(
-            "\n@highlight\n")
+        initial_text, *highlights = doc["passage"].strip().split("\n@highlight\n")
         text = initial_text + "\n\n"
         for highlight in highlights:
             text += f"  - {highlight}.\n"
@@ -343,8 +336,7 @@ class ReCoRD(Task):
 
     def construct_requests(self, doc, ctx):
         requests = [
-            rf.loglikelihood(
-                ctx, self.format_answer(query=doc["query"], entity=entity))
+            rf.loglikelihood(ctx, self.format_answer(query=doc["query"], entity=entity))
             for entity in doc["entities"]
         ]
         return requests
@@ -358,10 +350,12 @@ class ReCoRD(Task):
 
         prediction = doc["entities"][max_idx]
         gold_label_set = doc["answers"]
-        f1 = metric_max_over_ground_truths(squad_metrics.compute_f1,
-                                           prediction, gold_label_set)
-        em = metric_max_over_ground_truths(squad_metrics.compute_exact,
-                                           prediction, gold_label_set)
+        f1 = metric_max_over_ground_truths(
+            squad_metrics.compute_f1, prediction, gold_label_set
+        )
+        em = metric_max_over_ground_truths(
+            squad_metrics.compute_exact, prediction, gold_label_set
+        )
 
         return {
             "f1": f1,
@@ -409,8 +403,9 @@ class WordsInContext(Task):
             " two sentences above?\nAnswer:".format(
                 doc["sentence1"],
                 doc["sentence2"],
-                doc["sentence1"][doc["start1"]:doc["end1"]],
-            ))
+                doc["sentence1"][doc["start1"] : doc["end1"]],
+            )
+        )
 
     def doc_to_target(self, doc):
         return " {}".format({0: "no", 1: "yes"}[doc["label"]])
@@ -467,23 +462,22 @@ class SGWinogradSchemaChallenge(Task):
     def doc_to_text(self, doc):
         raw_passage = doc["text"]
         # NOTE: HuggingFace span indices are word-based not character-based.
-        pre = " ".join(raw_passage.split()[:doc["span2_index"]])
-        post = raw_passage[len(pre) + len(doc["span2_text"]) + 1:]
-        passage = general_detokenize(pre + " *{}*".format(doc["span2_text"]) +
-                                     post)
+        pre = " ".join(raw_passage.split()[: doc["span2_index"]])
+        post = raw_passage[len(pre) + len(doc["span2_text"]) + 1 :]
+        passage = general_detokenize(pre + " *{}*".format(doc["span2_text"]) + post)
         noun = doc["span1_text"]
         pronoun = doc["span2_text"]
         text = (
-            f"Passage: {passage}\n" +
-            f'Question: In the passage above, does the pronoun "*{pronoun}*" refer to "*{noun}*"?\n'
-            + "Answer:")
+            f"Passage: {passage}\n"
+            + f'Question: In the passage above, does the pronoun "*{pronoun}*" refer to "*{noun}*"?\n'
+            + "Answer:"
+        )
         return text
 
     def doc_to_target(self, doc):
         return " " + yesno(doc["label"])
 
     def construct_requests(self, doc, ctx):
-
         ll_yes, _ = rf.loglikelihood(ctx, " yes")
         ll_no, _ = rf.loglikelihood(ctx, " no")
 

@@ -10,22 +10,20 @@ from torch import nn
 import transformers
 
 
-def find_layers(module,
-                layers=[nn.Conv2d, nn.Linear, transformers.Conv1D],
-                name=''):
+def find_layers(module, layers=[nn.Conv2d, nn.Linear, transformers.Conv1D], name=""):
     if type(module) in layers:
         return {name: module}
     res = {}
     for name1, child in module.named_children():
         res.update(
-            find_layers(child,
-                        layers=layers,
-                        name=name + '.' + name1 if name != '' else name1))
+            find_layers(
+                child, layers=layers, name=name + "." + name1 if name != "" else name1
+            )
+        )
     return res
 
 
 class CacheHook:
-
     def __init__(self, cachinglm):
         if cachinglm is None:
             self.dbdict = None
@@ -41,7 +39,6 @@ class CacheHook:
 
 
 class LM(abc.ABC):
-
     def __init__(self):
         self.cache_hook = CacheHook(None)
 
@@ -141,7 +138,6 @@ class LM(abc.ABC):
 
 
 class BaseLM(LM):
-
     @property
     @abstractmethod
     def eot_token_id(self):
@@ -204,8 +200,7 @@ class BaseLM(LM):
 
             continuation_enc = self.tok_encode(continuation)
 
-            new_reqs.append(
-                ((context, continuation), context_enc, continuation_enc))
+            new_reqs.append(((context, continuation), context_enc, continuation_enc))
 
         return self._loglikelihood_tokens(new_reqs)
 
@@ -214,7 +209,7 @@ class BaseLM(LM):
         # TODO: automatic batch size detection for vectorization
 
         loglikelihoods = []
-        for (string, ) in tqdm(requests):
+        for (string,) in tqdm(requests):
             rolling_token_windows = list(
                 map(
                     make_disjoint_window,
@@ -224,15 +219,16 @@ class BaseLM(LM):
                         max_seq_len=self.max_length,
                         context_len=1,
                     ),
-                ))
+                )
+            )
 
-            rolling_token_windows = [(None, ) + x
-                                     for x in rolling_token_windows]
+            rolling_token_windows = [(None,) + x for x in rolling_token_windows]
 
             # TODO: extract out this call so it only gets called once and also somehow figure out partial caching for
             # that
-            string_nll = self._loglikelihood_tokens(rolling_token_windows,
-                                                    disable_tqdm=True)
+            string_nll = self._loglikelihood_tokens(
+                rolling_token_windows, disable_tqdm=True
+            )
 
             # discard is_greedy
             string_nll = [x[0] for x in string_nll]
@@ -260,8 +256,9 @@ class BaseLM(LM):
 
         # TODO: automatic (variable) batch size detection for vectorization
         re_ord = Reorderer(requests, _collate)
-        for chunk in chunks(tqdm(re_ord.get_reordered(), disable=disable_tqdm),
-                            self.batch_size):
+        for chunk in chunks(
+            tqdm(re_ord.get_reordered(), disable=disable_tqdm), self.batch_size
+        ):
             inps = []
             cont_toks_list = []
             inplens = []
@@ -287,25 +284,25 @@ class BaseLM(LM):
 
                 # when too long to fit in context, truncate from the left
                 inp = torch.tensor(
-                    (context_enc +
-                     continuation_enc)[-(self.max_length + 1):][:-1],
+                    (context_enc + continuation_enc)[-(self.max_length + 1) :][:-1],
                     dtype=torch.long,
                 ).to(self.device)
-                (inplen, ) = inp.shape
+                (inplen,) = inp.shape
 
                 cont = continuation_enc
 
                 # since in _collate we make sure length is descending, the longest is always the first one.
-                padding_length = (padding_length
-                                  if padding_length is not None else inplen)
+                padding_length = (
+                    padding_length if padding_length is not None else inplen
+                )
 
                 # pad length from seq to padding_length
                 inp = torch.cat(
                     [
                         inp,  # [seq]
-                        torch.zeros(padding_length - inplen,
-                                    dtype=torch.long).to(
-                                        inp.device),  # [padding_length - seq]
+                        torch.zeros(padding_length - inplen, dtype=torch.long).to(
+                            inp.device
+                        ),  # [padding_length - seq]
                     ],
                     dim=0,
                 )
@@ -320,8 +317,9 @@ class BaseLM(LM):
         dataset_logits = self._model_logits_on_dataset(dataset_inps)
 
         iter = 0
-        for chunk in chunks(tqdm(re_ord.get_reordered(), disable=disable_tqdm),
-                            self.batch_size):
+        for chunk in chunks(
+            tqdm(re_ord.get_reordered(), disable=disable_tqdm), self.batch_size
+        ):
             multi_logits = dataset_logits[iter]
             iter += 1
             inps = []
@@ -350,25 +348,25 @@ class BaseLM(LM):
 
                 # when too long to fit in context, truncate from the left
                 inp = torch.tensor(
-                    (context_enc +
-                     continuation_enc)[-(self.max_length + 1):][:-1],
+                    (context_enc + continuation_enc)[-(self.max_length + 1) :][:-1],
                     dtype=torch.long,
                 ).to(self.device)
-                (inplen, ) = inp.shape
+                (inplen,) = inp.shape
 
                 cont = continuation_enc
 
                 # since in _collate we make sure length is descending, the longest is always the first one.
-                padding_length = (padding_length
-                                  if padding_length is not None else inplen)
+                padding_length = (
+                    padding_length if padding_length is not None else inplen
+                )
 
                 # pad length from seq to padding_length
                 inp = torch.cat(
                     [
                         inp,  # [seq]
-                        torch.zeros(padding_length - inplen,
-                                    dtype=torch.long).to(
-                                        inp.device),  # [padding_length - seq]
+                        torch.zeros(padding_length - inplen, dtype=torch.long).to(
+                            inp.device
+                        ),  # [padding_length - seq]
                     ],
                     dim=0,
                 )
@@ -378,38 +376,40 @@ class BaseLM(LM):
                 inplens.append(inplen)
 
             for (cache_key, _, _), logits, inp, inplen, cont_toks in zip(
-                    chunk, multi_logits, inps, inplens, cont_toks_list):
-
+                chunk, multi_logits, inps, inplens, cont_toks_list
+            ):
                 # Slice to original seq length
                 contlen = len(cont_toks)
-                logits = logits[inplen - contlen:inplen].unsqueeze(
-                    0)  # [1, seq, vocab]
+                logits = logits[inplen - contlen : inplen].unsqueeze(
+                    0
+                )  # [1, seq, vocab]
 
                 # Check if per-token argmax is exactly equal to continuation
                 greedy_tokens = logits.argmax(dim=-1)
-                cont_toks = torch.tensor(
-                    cont_toks, dtype=torch.long).unsqueeze(0)  # [1, seq]
+                cont_toks = torch.tensor(cont_toks, dtype=torch.long).unsqueeze(
+                    0
+                )  # [1, seq]
                 # import pdb; pdb.set_trace()
                 max_equal = (greedy_tokens == cont_toks).all()
 
                 # Obtain log-probs at the corresponding continuation token indices
                 # last_token_slice = logits[:, -1, :].squeeze(0).tolist()
-                logits = torch.gather(
-                    logits, 2, cont_toks.unsqueeze(-1)).squeeze(-1)  # [1, seq]
+                logits = torch.gather(logits, 2, cont_toks.unsqueeze(-1)).squeeze(
+                    -1
+                )  # [1, seq]
 
                 # Answer: (log prob, is-exact-match)
                 answer = (float(logits.sum()), bool(max_equal))
 
                 # partial caching
                 if cache_key is not None:
-                    self.cache_hook.add_partial("loglikelihood", cache_key,
-                                                answer)
+                    self.cache_hook.add_partial("loglikelihood", cache_key, answer)
                 res.append(answer)
 
         return re_ord.get_original(res)
 
     def greedy_until(self, requests):
-        print('greedy utils in base...')
+        print("greedy utils in base...")
         # TODO: implement fully general `until` that handles until that are
         #       multiple tokens or that span multiple tokens correctly
 
@@ -426,17 +426,17 @@ class BaseLM(LM):
             if isinstance(until, str):
                 until = [until]
 
-            (primary_until, ) = self.tok_encode(until[0])
+            (primary_until,) = self.tok_encode(until[0])
 
-            context_enc = torch.tensor([
-                self.tok_encode(context)[self.max_gen_toks - self.max_length:]
-            ]).to(self.device)
+            context_enc = torch.tensor(
+                [self.tok_encode(context)[self.max_gen_toks - self.max_length :]]
+            ).to(self.device)
 
             cont = self._model_generate(
-                context_enc, context_enc.shape[1] + self.max_gen_toks,
-                primary_until)
+                context_enc, context_enc.shape[1] + self.max_gen_toks, primary_until
+            )
 
-            s = self.tok_decode(cont[0].tolist()[context_enc.shape[1]:])
+            s = self.tok_decode(cont[0].tolist()[context_enc.shape[1] :])
 
             for term in until:
                 s = s.split(term)[0]
@@ -452,7 +452,7 @@ class BaseLM(LM):
 def make_disjoint_window(pair):
     """Takes output from get_rolling_token_windows and makes the context not overlap with the continuation"""
     a, b = pair
-    return a[:len(a) - (len(b) - 1)], b
+    return a[: len(a) - (len(b) - 1)], b
 
 
 def hash_args(attr, args):
@@ -477,8 +477,7 @@ def simple_parse_args_string(args_string):
     return args_dict
 
 
-def get_rolling_token_windows(token_list, prefix_token, max_seq_len,
-                              context_len):
+def get_rolling_token_windows(token_list, prefix_token, max_seq_len, context_len):
     """
     - context_len allows for a rolling window context, allowing each prediction window to potentially
       condition on some context
@@ -505,8 +504,7 @@ def get_rolling_token_windows(token_list, prefix_token, max_seq_len,
 
     # Special handling for first window: predict all tokens
     first_seq_len = min(max_seq_len, len(token_list))
-    yield ([prefix_token] + token_list[:first_seq_len - 1],
-           token_list[:first_seq_len])
+    yield ([prefix_token] + token_list[: first_seq_len - 1], token_list[:first_seq_len])
     predicted += first_seq_len
 
     while predicted < len(token_list):
@@ -514,14 +512,13 @@ def get_rolling_token_windows(token_list, prefix_token, max_seq_len,
         window_end = predicted + window_pred_len
 
         yield (
-            token_list[window_end - max_seq_len - 1:window_end - 1],
-            token_list[window_end - window_pred_len:window_end],
+            token_list[window_end - max_seq_len - 1 : window_end - 1],
+            token_list[window_end - window_pred_len : window_end],
         )
         predicted += window_pred_len
 
 
 class Reorderer:
-
     def __init__(self, arr, fn):
         self.size = len(arr)
         arr = list(enumerate(arr))

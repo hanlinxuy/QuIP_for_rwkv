@@ -11,28 +11,25 @@ from .gptq import GPTQ
 
 
 class BLOOMClass(BaseLM):
-
     def __init__(self, args):
-
         super().__init__()
 
         self.args = args
-        self._device = torch.device(
-            "cuda" if torch.cuda.is_available() else "cpu")
+        self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model_name = args.model
         self.batch_size_per_gpu = args.batch_size
 
-        self.model = BloomForCausalLM.from_pretrained(self.model_name,
-                                                      torch_dtype='auto')
+        self.model = BloomForCausalLM.from_pretrained(
+            self.model_name, torch_dtype="auto"
+        )
         self.model.eval()
         self.seqlen = 2048
 
         # pretrained tokenizer for neo is broken for now so just hard-coding this to gpt2
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name,
-                                                       use_fast=False)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name, use_fast=False)
 
         self.vocab_size = self.tokenizer.vocab_size
-        print('BLOOM vocab size: ', self.vocab_size)
+        print("BLOOM vocab size: ", self.vocab_size)
 
     @property
     def eot_token_id(self):
@@ -45,7 +42,7 @@ class BLOOMClass(BaseLM):
 
     @property
     def max_gen_toks(self):
-        print('max_gen_toks fn')
+        print("max_gen_toks fn")
         return 256
 
     @property
@@ -83,16 +80,16 @@ class BLOOMClass(BaseLM):
 
         model = self.model
 
-        print('Evaluation...')
+        print("Evaluation...")
 
         use_cache = model.config.use_cache
         model.config.use_cache = False
         layers = model.transformer.h
 
-        model.transformer.word_embeddings = model.transformer.word_embeddings.to(
-            dev)
-        model.transformer.word_embeddings_layernorm = model.transformer.word_embeddings_layernorm.to(
-            dev)
+        model.transformer.word_embeddings = model.transformer.word_embeddings.to(dev)
+        model.transformer.word_embeddings_layernorm = (
+            model.transformer.word_embeddings_layernorm.to(dev)
+        )
         layers[0] = layers[0].to(dev)
 
         dtype = next(iter(model.parameters())).dtype
@@ -104,27 +101,27 @@ class BLOOMClass(BaseLM):
                 torch.zeros(
                     (batch.shape[1], self.model.config.hidden_size),
                     dtype=dtype,
-                ))
+                )
+            )
             outs.append(
                 torch.zeros(
                     (batch.shape[1], self.model.config.hidden_size),
                     dtype=dtype,
-                ))
+                )
+            )
 
-        cache = {'i': 0, 'attention_masks': [], 'alibis': []}
+        cache = {"i": 0, "attention_masks": [], "alibis": []}
 
         class Catcher(nn.Module):
-
             def __init__(self, module):
                 super().__init__()
                 self.module = module
 
             def forward(self, inp, **kwargs):
-                inps[cache['i']] = inp
-                cache['i'] += 1
-                cache['attention_masks'].append(
-                    kwargs['attention_mask'].detach().cpu())
-                cache['alibis'].append(kwargs['alibi'].detach().cpu())
+                inps[cache["i"]] = inp
+                cache["i"] += 1
+                cache["attention_masks"].append(kwargs["attention_mask"].detach().cpu())
+                cache["alibis"].append(kwargs["alibi"].detach().cpu())
                 raise ValueError
 
         layers[0] = Catcher(layers[0])
@@ -137,14 +134,14 @@ class BLOOMClass(BaseLM):
         layers[0] = layers[0].module
 
         layers[0] = layers[0].cpu()
-        model.transformer.word_embeddings = model.transformer.word_embeddings.cpu(
-        )
-        model.transformer.word_embeddings_layernorm = model.transformer.word_embeddings_layernorm.cpu(
+        model.transformer.word_embeddings = model.transformer.word_embeddings.cpu()
+        model.transformer.word_embeddings_layernorm = (
+            model.transformer.word_embeddings_layernorm.cpu()
         )
         torch.cuda.empty_cache()
 
-        attention_masks = cache['attention_masks']
-        alibis = cache['alibis']
+        attention_masks = cache["attention_masks"]
+        alibis = cache["alibis"]
 
         for i in range(len(layers)):
             print(i)
@@ -154,21 +151,25 @@ class BLOOMClass(BaseLM):
                 subset = find_layers(layer)
                 for name in subset:
                     quantizer = Quantizer()
-                    quantizer.configure(self.args.wbits,
-                                        perchannel=True,
-                                        sym=False,
-                                        mse=False)
+                    quantizer.configure(
+                        self.args.wbits, perchannel=True, sym=False, mse=False
+                    )
                     W = subset[name].weight.data
                     quantizer.find_params(W, weight=True)
                     subset[name].weight.data = quantize(
-                        W, quantizer.scale, quantizer.zero, quantizer.maxq).to(
-                            next(iter(layer.parameters())).dtype)
+                        W, quantizer.scale, quantizer.zero, quantizer.maxq
+                    ).to(next(iter(layer.parameters())).dtype)
 
             for j in range(nsamples):
-                outs[j] = layer(
-                    inps[j].to(self.device),
-                    attention_mask=attention_masks[j].to(self.device),
-                    alibi=alibis[j].to(self.device))[0].detach().cpu()
+                outs[j] = (
+                    layer(
+                        inps[j].to(self.device),
+                        attention_mask=attention_masks[j].to(self.device),
+                        alibi=alibis[j].to(self.device),
+                    )[0]
+                    .detach()
+                    .cpu()
+                )
 
             layers[i] = layer.cpu()
             del layer
@@ -178,12 +179,12 @@ class BLOOMClass(BaseLM):
         model.transformer.ln_f = model.transformer.ln_f.to(dev)
         model.lm_head = model.lm_head.to(dev)
 
-        for i in tqdm(range(nsamples), desc='Last Layer'):
+        for i in tqdm(range(nsamples), desc="Last Layer"):
             hidden_states = inps[i].unsqueeze(0).to(self.device)
             hidden_states = self.model.transformer.ln_f(hidden_states)
             batch_logits = F.log_softmax(
-                self.model.lm_head(hidden_states)[0][:, :, :250680],
-                dim=-1).cpu()
+                self.model.lm_head(hidden_states)[0][:, :, :250680], dim=-1
+            ).cpu()
             dataset_logits.append(batch_logits)
 
         model.config.use_cache = use_cache
@@ -198,10 +199,12 @@ class BLOOMClass(BaseLM):
         self.model.config.use_cache = False
         layers = self.model.transformer.h
 
-        self.model.transformer.word_embeddings = self.model.transformer.word_embeddings.to(
-            self.device)
-        self.model.transformer.word_embeddings_layernorm = self.model.transformer.word_embeddings_layernorm.to(
-            self.device)
+        self.model.transformer.word_embeddings = (
+            self.model.transformer.word_embeddings.to(self.device)
+        )
+        self.model.transformer.word_embeddings_layernorm = (
+            self.model.transformer.word_embeddings_layernorm.to(self.device)
+        )
         layers[0] = layers[0].to(self.device)
 
         dtype = next(iter(self.model.parameters())).dtype
@@ -213,27 +216,27 @@ class BLOOMClass(BaseLM):
                 torch.zeros(
                     (batch.shape[1], self.model.config.hidden_size),
                     dtype=dtype,
-                ))
+                )
+            )
             outs.append(
                 torch.zeros(
                     (batch.shape[1], self.model.config.hidden_size),
                     dtype=dtype,
-                ))
+                )
+            )
 
-        cache = {'i': 0, 'attention_masks': [], 'alibi': []}
+        cache = {"i": 0, "attention_masks": [], "alibi": []}
 
         class Catcher(nn.Module):
-
             def __init__(self, module):
                 super().__init__()
                 self.module = module
 
             def forward(self, inp, **kwargs):
-                inps[cache['i']] = inp.cpu()
-                cache['i'] += 1
-                cache['attention_masks'].append(
-                    kwargs['attention_mask'].detach().cpu())
-                cache['alibi'].append(kwargs['alibi'].detach().cpu())
+                inps[cache["i"]] = inp.cpu()
+                cache["i"] += 1
+                cache["attention_masks"].append(kwargs["attention_mask"].detach().cpu())
+                cache["alibi"].append(kwargs["alibi"].detach().cpu())
                 raise ValueError
 
         layers[0] = Catcher(layers[0])
@@ -246,56 +249,60 @@ class BLOOMClass(BaseLM):
         layers[0] = layers[0].module
 
         layers[0] = layers[0].cpu()
-        self.model.transformer.word_embeddings = self.model.transformer.word_embeddings.cpu(
+        self.model.transformer.word_embeddings = (
+            self.model.transformer.word_embeddings.cpu()
         )
-        self.model.transformer.word_embeddings_layernorm = self.model.transformer.word_embeddings_layernorm.cpu(
+        self.model.transformer.word_embeddings_layernorm = (
+            self.model.transformer.word_embeddings_layernorm.cpu()
         )
         torch.cuda.empty_cache()  # TODO: maybe we don't need this?
 
-        attention_masks = cache['attention_masks']
-        alibis = cache['alibi']
+        attention_masks = cache["attention_masks"]
+        alibis = cache["alibi"]
 
         for i in range(len(layers)):
-            print('layer: ', i)
+            print("layer: ", i)
             layer = layers[i].to(self.device)
 
             if self.args.wbits < 32 and self.args.nearest:
                 subset = find_layers(layer)
                 for name in subset:
-                    if 'lm_head' in name:
+                    if "lm_head" in name:
                         continue
                     quantizer = Quantizer()
-                    quantizer.configure(self.args.wbits,
-                                        perchannel=True,
-                                        sym=False,
-                                        mse=False,
-                                        norm=2.4)
+                    quantizer.configure(
+                        self.args.wbits, perchannel=True, sym=False, mse=False, norm=2.4
+                    )
                     W = subset[name].weight.data
                     quantizer.find_params(W, weight=True)
                     subset[name].weight.data = quantize(
-                        W, quantizer.scale, quantizer.zero, quantizer.maxq).to(
-                            next(iter(layer.parameters())).dtype)
+                        W, quantizer.scale, quantizer.zero, quantizer.maxq
+                    ).to(next(iter(layer.parameters())).dtype)
 
             for j in range(nbatches):
-                outs[j] = layer(
-                    inps[j].to(self.device),
-                    attention_mask=attention_masks[j].to(self.device),
-                    alibi=alibis[j].to(self.device))[0].detach().cpu()
+                outs[j] = (
+                    layer(
+                        inps[j].to(self.device),
+                        attention_mask=attention_masks[j].to(self.device),
+                        alibi=alibis[j].to(self.device),
+                    )[0]
+                    .detach()
+                    .cpu()
+                )
             layers[i] = layer.cpu()
             del layer
             torch.cuda.empty_cache()
             inps, outs = outs, inps
 
-        self.model.transformer.ln_f = self.model.transformer.ln_f.to(
-            self.device)
+        self.model.transformer.ln_f = self.model.transformer.ln_f.to(self.device)
         self.model.lm_head = self.model.lm_head.to(self.device)
 
-        for i in tqdm(range(nbatches), desc='Last Layer'):
+        for i in tqdm(range(nbatches), desc="Last Layer"):
             hidden_states = inps[i].unsqueeze(0).to(self.device)
             hidden_states = self.model.transformer.ln_f(hidden_states)
             batch_logits = F.log_softmax(
-                self.model.lm_head(hidden_states)[0][:, :, :250680],
-                dim=-1).cpu()
+                self.model.lm_head(hidden_states)[0][:, :, :250680], dim=-1
+            ).cpu()
             dataset_logits.append(batch_logits)
 
         return dataset_logits
@@ -306,20 +313,19 @@ class BLOOMClass(BaseLM):
         dataset_logits = []
         for batch in inps:
             multi_logits = F.log_softmax(
-                self._model_call(batch),
-                dim=-1).cpu()  # [batch, padding_length, vocab]
+                self._model_call(batch), dim=-1
+            ).cpu()  # [batch, padding_length, vocab]
             dataset_logits.append(multi_logits)
         return dataset_logits
 
     def _model_generate(self, context, max_length, eos_token_id):
-        return self.model.generate(context,
-                                   max_length=max_length,
-                                   eos_token_id=eos_token_id,
-                                   do_sample=False)
+        return self.model.generate(
+            context, max_length=max_length, eos_token_id=eos_token_id, do_sample=False
+        )
 
     @torch.no_grad()
     def bloom_sequential(self, dataloader):
-        print('Starting ...')
+        print("Starting ...")
 
         model = self.model
         dev = self.device
@@ -328,30 +334,30 @@ class BLOOMClass(BaseLM):
         model.config.use_cache = False
         layers = model.transformer.h
 
-        model.transformer.word_embeddings = model.transformer.word_embeddings.to(
-            dev)
-        model.transformer.word_embeddings_layernorm = model.transformer.word_embeddings_layernorm.to(
-            dev)
+        model.transformer.word_embeddings = model.transformer.word_embeddings.to(dev)
+        model.transformer.word_embeddings_layernorm = (
+            model.transformer.word_embeddings_layernorm.to(dev)
+        )
         layers[0] = layers[0].to(dev)
 
         dtype = next(iter(model.parameters())).dtype
         inps = torch.zeros(
             (self.args.nsamples, self.seqlen, model.config.hidden_size),
             dtype=dtype,
-            device=dev)
-        cache = {'i': 0, 'attention_mask': None, 'alibi': None}
+            device=dev,
+        )
+        cache = {"i": 0, "attention_mask": None, "alibi": None}
 
         class Catcher(nn.Module):
-
             def __init__(self, module):
                 super().__init__()
                 self.module = module
 
             def forward(self, inp, **kwargs):
-                inps[cache['i']] = inp
-                cache['i'] += 1
-                cache['attention_mask'] = kwargs['attention_mask']
-                cache['alibi'] = kwargs['alibi']
+                inps[cache["i"]] = inp
+                cache["i"] += 1
+                cache["attention_mask"] = kwargs["attention_mask"]
+                cache["alibi"] = kwargs["alibi"]
                 raise ValueError
 
         layers[0] = Catcher(layers[0])
@@ -363,17 +369,17 @@ class BLOOMClass(BaseLM):
         layers[0] = layers[0].module
 
         layers[0] = layers[0].cpu()
-        model.transformer.word_embeddings = model.transformer.word_embeddings.cpu(
-        )
-        model.transformer.word_embeddings_layernorm = model.transformer.word_embeddings_layernorm.cpu(
+        model.transformer.word_embeddings = model.transformer.word_embeddings.cpu()
+        model.transformer.word_embeddings_layernorm = (
+            model.transformer.word_embeddings_layernorm.cpu()
         )
         torch.cuda.empty_cache()
 
         outs = torch.zeros_like(inps)
-        attention_mask = cache['attention_mask']
-        alibi = cache['alibi']
+        attention_mask = cache["attention_mask"]
+        alibi = cache["alibi"]
 
-        print('Ready.')
+        print("Ready.")
 
         for i in range(len(layers)):
             layer = layers[i].to(dev)
@@ -383,13 +389,11 @@ class BLOOMClass(BaseLM):
             for name in subset:
                 gptq[name] = GPTQ(subset[name])
                 gptq[name].quantizer = Quantizer()
-                gptq[name].quantizer.configure(self.args.wbits,
-                                               perchannel=True,
-                                               sym=False,
-                                               mse=False)
+                gptq[name].quantizer.configure(
+                    self.args.wbits, perchannel=True, sym=False, mse=False
+                )
 
             def add_batch(name):
-
                 def tmp(_, inp, out):
                     gptq[name].add_batch(inp[0].data, out.data)
 
@@ -397,24 +401,24 @@ class BLOOMClass(BaseLM):
 
             handles = []
             for name in subset:
-                handles.append(subset[name].register_forward_hook(
-                    add_batch(name)))
+                handles.append(subset[name].register_forward_hook(add_batch(name)))
             for j in range(self.args.nsamples):
-                outs[j] = layer(inps[j].unsqueeze(0),
-                                attention_mask=attention_mask,
-                                alibi=alibi)[0]
+                outs[j] = layer(
+                    inps[j].unsqueeze(0), attention_mask=attention_mask, alibi=alibi
+                )[0]
             for h in handles:
                 h.remove()
 
             for name in subset:
                 print(i, name)
-                print('Quantizing ...')
-                gptq[name].fasterquant(percdamp=self.args.percdamp,
-                                       groupsize=self.args.groupsize)
+                print("Quantizing ...")
+                gptq[name].fasterquant(
+                    percdamp=self.args.percdamp, groupsize=self.args.groupsize
+                )
             for j in range(self.args.nsamples):
-                outs[j] = layer(inps[j].unsqueeze(0),
-                                attention_mask=attention_mask,
-                                alibi=alibi)[0]
+                outs[j] = layer(
+                    inps[j].unsqueeze(0), attention_mask=attention_mask, alibi=alibi
+                )[0]
 
             layers[i] = layer.cpu()
             del gptq

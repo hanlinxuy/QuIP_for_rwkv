@@ -28,13 +28,16 @@ def main():
         with open(args.output_path, "w") as f:
             f.write(dumped)
 
-    print(f"{args.model}"
-          f"num_fewshot: {args.num_fewshot},"
-          f" batch_size: {args.batch_size}")
+    print(
+        f"{args.model}"
+        f"num_fewshot: {args.num_fewshot},"
+        f" batch_size: {args.batch_size}"
+    )
     if args.table_results:
         print(evaluator.make_table(results))
     else:
         from pprint import pprint
+
         pprint(results)
 
 

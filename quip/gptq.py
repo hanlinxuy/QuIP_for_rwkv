@@ -15,7 +15,6 @@ torch.backends.cudnn.allow_tf32 = False
 
 
 class GPTQ(QuantMethod):
-
     def fasterquant(self, blocksize=128, groupsize=-1, copy_H=False, debug_equiv=False):
         W = self.layer.weight.data.clone()
         if isinstance(self.layer, nn.Conv2d):
@@ -69,16 +68,16 @@ class GPTQ(QuantMethod):
 
                 if groupsize != -1:
                     if (i1 + i) % groupsize == 0:
-                        self.quantizer.find_params(W[:, (i1 + i):(i1 + i +
-                                                                  groupsize)],
-                                                   weight=True)
+                        self.quantizer.find_params(
+                            W[:, (i1 + i) : (i1 + i + groupsize)], weight=True
+                        )
 
                 q = self.quantizer.quantize(w.unsqueeze(1)).flatten()
                 # q = quantize(w.unsqueeze(1), self.quantizer.scale,
                 #              self.quantizer.zero,
                 #              self.quantizer.maxq).flatten()
                 Q1[:, i] = q
-                Losses1[:, i] = (w - q)**2 / d**2
+                Losses1[:, i] = (w - q) ** 2 / d**2
 
                 err1 = (w - q) / d
                 W1[:, i:] -= err1.unsqueeze(1).matmul(Hinv1[i, i:].unsqueeze(0))
@@ -92,7 +91,7 @@ class GPTQ(QuantMethod):
             if DEBUG:
                 self.layer.weight.data[:, :i2] = Q[:, :i2]
                 self.layer.weight.data[:, i2:] = W[:, i2:]
-                print(torch.sum((self.layer(self.inp1) - self.out1)**2))
+                print(torch.sum((self.layer(self.inp1) - self.out1) ** 2))
                 print(torch.sum(Losses))
 
         torch.cuda.synchronize()
@@ -103,14 +102,14 @@ class GPTQ(QuantMethod):
         if isinstance(self.layer, transformers.Conv1D):
             Q = Q.t()
         self.layer.weight.data = Q.reshape(self.layer.weight.shape).to(
-            self.layer.weight.data.dtype)
+            self.layer.weight.data.dtype
+        )
 
         if DEBUG:
-            print(torch.sum((self.layer(self.inp1) - self.out1)**2))
+            print(torch.sum((self.layer(self.inp1) - self.out1) ** 2))
 
         self.postproc()
         self.error_compute(full_W, self.layer.weight.data)
         # to preserve H for saveH
         if not copy_H:
             del self.H
-

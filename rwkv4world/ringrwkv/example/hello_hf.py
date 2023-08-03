@@ -5,27 +5,27 @@ from ringrwkv.modehf_world import RwkvForCausalLM
 
 
 model = RwkvForCausalLM.from_pretrained("RWKV-4-World-7B")
-tokenizer = TRIE_TOKENIZER('./ringrwkv/rwkv_vocab_v20230424.txt')
-     
+tokenizer = TRIE_TOKENIZER("./ringrwkv/rwkv_vocab_v20230424.txt")
+
 text = "你叫什么名字？"
 
-question = f'Question: {text.strip()}\n\nAnswer:'
+question = f"Question: {text.strip()}\n\nAnswer:"
 
 input_ids = tokenizer.encode(question)
-#print(tokenizer.decode(input_ids))
+# print(tokenizer.decode(input_ids))
 input_ids = torch.tensor(input_ids).unsqueeze(0)
 
-out = model.generate(input_ids,max_new_tokens=40)
+out = model.generate(input_ids, max_new_tokens=40)
 
-#print(out[0])
+# print(out[0])
 
 outlist = out[0].tolist()
 
-for i  in outlist:
-    if i==0:
+for i in outlist:
+    if i == 0:
         outlist.remove(i)
 
-#print(outlist)
+# print(outlist)
 answer = tokenizer.decode(outlist)
 
 # answer = tokenizer.decode([10464, 11685, 19126, 12605, 11021, 10399, 12176, 10464, 16533, 10722,
@@ -36,16 +36,15 @@ answer = tokenizer.decode(outlist)
 #         11860, 10080])
 print(answer)
 
-#print(input_ids.shape)
-#rwkvoutput = model.forward(input_ids=input_ids,labels=input_ids) #loss,logits,state,hidden_states,attentions
+# print(input_ids.shape)
+# rwkvoutput = model.forward(input_ids=input_ids,labels=input_ids) #loss,logits,state,hidden_states,attentions
 # print("loss:")
 # print(rwkvoutput.loss)
 # print("logits:")
 # print(rwkvoutput.logits)
 # print("state:")
 # print(rwkvoutput.state)
-#print("last_hidden_state:")
+# print("last_hidden_state:")
 # print(rwkvoutput.last_hidden_state)
 # print("attentions:")
 # print(rwkvoutput.attentions)
-

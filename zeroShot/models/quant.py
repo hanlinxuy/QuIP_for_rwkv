@@ -4,7 +4,7 @@ import torch.nn as nn
 try:
     import quant_cuda
 except:
-    print('CUDA extension not installed.')
+    print("CUDA extension not installed.")
 
 
 def quantize(x, scale, zero, maxq):
@@ -13,21 +13,22 @@ def quantize(x, scale, zero, maxq):
 
 
 class Quantizer(nn.Module):
-
     def __init__(self, shape=1):
         super(Quantizer, self).__init__()
-        self.register_buffer('maxq', torch.tensor(0))
-        self.register_buffer('scale', torch.zeros(shape))
-        self.register_buffer('zero', torch.zeros(shape))
+        self.register_buffer("maxq", torch.tensor(0))
+        self.register_buffer("scale", torch.zeros(shape))
+        self.register_buffer("zero", torch.zeros(shape))
 
-    def configure(self,
-                  bits,
-                  perchannel=False,
-                  sym=True,
-                  mse=False,
-                  norm=2.4,
-                  grid=100,
-                  maxshrink=.8):
+    def configure(
+        self,
+        bits,
+        perchannel=False,
+        sym=True,
+        mse=False,
+        norm=2.4,
+        grid=100,
+        maxshrink=0.8,
+    ):
         self.maxq = torch.tensor(2**bits - 1)
         self.perchannel = perchannel
         self.sym = sym
@@ -75,16 +76,14 @@ class Quantizer(nn.Module):
             self.zero = torch.round(-xmin / self.scale)
 
         if self.mse:
-            best = torch.full([x.shape[0]], float('inf'), device=dev)
+            best = torch.full([x.shape[0]], float("inf"), device=dev)
             for i in range(int(self.maxshrink * self.grid)):
                 p = 1 - i / self.grid
                 xmin1 = p * xmin
                 xmax1 = p * xmax
                 scale1 = (xmax1 - xmin1) / self.maxq
-                zero1 = torch.round(-xmin1 /
-                                    scale1) if not self.sym else self.zero
-                q = quantize(x, scale1.unsqueeze(1), zero1.unsqueeze(1),
-                             self.maxq)
+                zero1 = torch.round(-xmin1 / scale1) if not self.sym else self.zero
+                q = quantize(x, scale1.unsqueeze(1), zero1.unsqueeze(1), self.maxq)
                 q -= x
                 q.abs_()
                 q.pow_(self.norm)
@@ -132,7 +131,6 @@ class Quantizer(nn.Module):
 
 
 class ActQuantWrapper(nn.Module):
-
     def __init__(self, module):
         super(ActQuantWrapper, self).__init__()
         self.module = module
@@ -149,7 +147,7 @@ class ActQuantWrapper(nn.Module):
         return self.module(self.quantizer.quantize(x))
 
 
-def add_actquant(module, name='', layers=[nn.Conv2d, nn.Linear]):
+def add_actquant(module, name="", layers=[nn.Conv2d, nn.Linear]):
     if isinstance(module, ActQuantWrapper):
         return
     for attr in dir(module):
@@ -173,28 +171,30 @@ def add_actquant(module, name='', layers=[nn.Conv2d, nn.Linear]):
                     replaced.append(child)
             setattr(module, attr, nn.ModuleList(replaced))
     for name1, child in module.named_children():
-        add_actquant(child, name + '.' + name1 if name != '' else name1,
-                     layers)
+        add_actquant(child, name + "." + name1 if name != "" else name1, layers)
 
 
 import time
 
 
 class Quant4Linear(nn.Module):
-
     def __init__(self, linear, scales, zeros):
         super().__init__()
-        self.register_buffer('zeros', zeros.clone() * scales)
-        self.register_buffer('scales', scales)
-        self.register_buffer('bias', linear.bias.data)
-        intweight = torch.round(
-            (linear.weight.data + self.zeros) / self.scales).to(torch.int)
+        self.register_buffer("zeros", zeros.clone() * scales)
+        self.register_buffer("scales", scales)
+        self.register_buffer("bias", linear.bias.data)
+        intweight = torch.round((linear.weight.data + self.zeros) / self.scales).to(
+            torch.int
+        )
         intweight = intweight.t().contiguous()
         self.register_buffer(
-            'qweight',
-            torch.zeros((intweight.shape[0] // 8, intweight.shape[1]),
-                        dtype=torch.int,
-                        device=self.bias.device))
+            "qweight",
+            torch.zeros(
+                (intweight.shape[0] // 8, intweight.shape[1]),
+                dtype=torch.int,
+                device=self.bias.device,
+            ),
+        )
         for i in range(intweight.shape[0]):
             self.qweight[i // 8] |= intweight[i] << (4 * (i % 8))
         # self.linear = linear.to(torch.device('cuda:0'))
@@ -204,25 +204,24 @@ class Quant4Linear(nn.Module):
             outshape = list(x.shape)
             y = self.bias.clone()
             outshape[-1] = self.bias.numel()
-            quant_cuda.vecquant4matmul(x, self.qweight, y, self.scales,
-                                       self.zeros)
+            quant_cuda.vecquant4matmul(x, self.qweight, y, self.scales, self.zeros)
             # y = self.linear(x)
             return y.reshape(outshape)
         print(x.shape)
-        raise ValueError('Only supports a single token currently.')
+        raise ValueError("Only supports a single token currently.")
 
 
-def make_quant4(module, quantizers, name=''):
+def make_quant4(module, quantizers, name=""):
     if isinstance(module, Quant4Linear):
         return
     for attr in dir(module):
         tmp = getattr(module, attr)
-        name1 = name + '.' + attr if name != '' else attr
+        name1 = name + "." + attr if name != "" else attr
         if name1 in quantizers:
             setattr(
-                module, attr,
-                Quant4Linear(tmp, quantizers[name1].scale,
-                             quantizers[name1].zero))
+                module,
+                attr,
+                Quant4Linear(tmp, quantizers[name1].scale, quantizers[name1].zero),
+            )
     for name1, child in module.named_children():
-        make_quant4(child, quantizers,
-                    name + '.' + name1 if name != '' else name1)
+        make_quant4(child, quantizers, name + "." + name1 if name != "" else name1)

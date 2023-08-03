@@ -7,12 +7,14 @@ def quantize_qfna(x, scale, zero, maxq):
     q = torch.clamp(torch.round(x / scale) + zero, 0, maxq)
     return scale * (q - zero)
 
+
 def quantize_qfnb(x, scale, maxq):
     q = x / scale
-    q = torch.clamp(torch.round(((q+1)/2) * maxq), 0, maxq)
+    q = torch.clamp(torch.round(((q + 1) / 2) * maxq), 0, maxq)
     q = (q / maxq) * 2 - 1
     q = q * scale
     return q
+
 
 def quantize_qfnc(x, scale, zero, maxq):
     # for LDL vs GPTQ equivalency
@@ -20,23 +22,25 @@ def quantize_qfnc(x, scale, zero, maxq):
     q = torch.round(q)
     return scale * (q - zero)
 
-class Quantizer(nn.Module):
 
+class Quantizer(nn.Module):
     def __init__(self, shape=1):
         super(Quantizer, self).__init__()
-        self.register_buffer('maxq', torch.tensor(0))
-        self.register_buffer('scale', torch.zeros(shape))
-        self.register_buffer('zero', torch.zeros(shape))
+        self.register_buffer("maxq", torch.tensor(0))
+        self.register_buffer("scale", torch.zeros(shape))
+        self.register_buffer("zero", torch.zeros(shape))
 
-    def configure(self,
-                  bits,
-                  perchannel=False,
-                  sym=True,
-                  qfn='a',
-                  mse=False,
-                  norm=2.4,
-                  grid=100,
-                  maxshrink=.8):
+    def configure(
+        self,
+        bits,
+        perchannel=False,
+        sym=True,
+        qfn="a",
+        mse=False,
+        norm=2.4,
+        grid=100,
+        maxshrink=0.8,
+    ):
         self.maxq = torch.tensor(2**bits - 1)
         self.perchannel = perchannel
         self.sym = sym
@@ -47,11 +51,11 @@ class Quantizer(nn.Module):
         self.maxshrink = maxshrink
 
     def find_params(self, x, weight=False):
-        if self.qfn == 'a':
+        if self.qfn == "a":
             self.find_params_qfna(x, weight=weight)
-        elif self.qfn == 'b':
+        elif self.qfn == "b":
             self.find_params_qfnb(x)
-        elif self.qfn == 'c':
+        elif self.qfn == "c":
             self.find_params_qfna(x, weight=weight)
 
     def find_params_qfna(self, x, weight=False):
@@ -93,16 +97,14 @@ class Quantizer(nn.Module):
             self.zero = torch.round(-xmin / self.scale)
 
         if self.mse:
-            best = torch.full([x.shape[0]], float('inf'), device=dev)
+            best = torch.full([x.shape[0]], float("inf"), device=dev)
             for i in range(int(self.maxshrink * self.grid)):
                 p = 1 - i / self.grid
                 xmin1 = p * xmin
                 xmax1 = p * xmax
                 scale1 = (xmax1 - xmin1) / self.maxq
-                zero1 = torch.round(-xmin1 /
-                                    scale1) if not self.sym else self.zero
-                q = quantize(x, scale1.unsqueeze(1), zero1.unsqueeze(1),
-                             self.maxq)
+                zero1 = torch.round(-xmin1 / scale1) if not self.sym else self.zero
+                q = quantize(x, scale1.unsqueeze(1), zero1.unsqueeze(1), self.maxq)
                 q -= x
                 q.abs_()
                 q.pow_(self.norm)
@@ -137,19 +139,19 @@ class Quantizer(nn.Module):
 
     def find_params_qfnb(self, x):
         dev = x.device
-        self.maxq  = self.maxq.to(dev)
-        self.scale = None  #needs to be calculated after preproc
-        self.zero  = None
+        self.maxq = self.maxq.to(dev)
+        self.scale = None  # needs to be calculated after preproc
+        self.zero = None
 
     def quantize(self, x):
-        if self.qfn == 'a':
+        if self.qfn == "a":
             assert self.ready()
             return quantize_qfna(x, self.scale, self.zero, self.maxq)
-        elif self.qfn == 'b':
+        elif self.qfn == "b":
             assert torch.all(self.maxq != 0)
             self.scale = 2.4 * x.square().mean().sqrt() + 1e-16
             return quantize_qfnb(x, self.scale, self.maxq)
-        elif self.qfn == 'c':
+        elif self.qfn == "c":
             # for LDL vs GPTQ equivalency, does round in same order as bal code
             assert self.ready()
             return quantize_qfnc(x, self.scale, self.zero, self.maxq)
@@ -166,34 +168,34 @@ class Quantizer(nn.Module):
 try:
     import quant_cuda
 except:
-    print('CUDA extension not installed.')
+    print("CUDA extension not installed.")
 
 
 # Assumes layer is perfectly divisible into 1024 * 1024 blocks
 class Quant3Linear(nn.Module):
-
     def __init__(self, infeatures, outfeatures):
         super().__init__()
-        self.register_buffer('zeros', torch.zeros((outfeatures, 1)))
-        self.register_buffer('scales', torch.zeros((outfeatures, 1)))
-        self.register_buffer('bias', torch.zeros(outfeatures))
+        self.register_buffer("zeros", torch.zeros((outfeatures, 1)))
+        self.register_buffer("scales", torch.zeros((outfeatures, 1)))
+        self.register_buffer("bias", torch.zeros(outfeatures))
         self.register_buffer(
-            'qweight',
-            torch.zeros((infeatures // 1024 * 96, outfeatures),
-                        dtype=torch.int))
+            "qweight",
+            torch.zeros((infeatures // 1024 * 96, outfeatures), dtype=torch.int),
+        )
 
     def pack(self, linear, scales, zeros):
         self.zeros = zeros * scales
         self.scales = scales.clone()
         self.bias = linear.bias.clone()
 
-        intweight = torch.round(
-            (linear.weight.data + self.zeros) / self.scales).to(torch.int)
+        intweight = torch.round((linear.weight.data + self.zeros) / self.scales).to(
+            torch.int
+        )
         intweight = intweight.t().contiguous()
         intweight = intweight.numpy().astype(np.uint32)
         qweight = np.zeros(
-            (intweight.shape[0] // 1024 * 96, intweight.shape[1]),
-            dtype=np.uint32)
+            (intweight.shape[0] // 1024 * 96, intweight.shape[1]), dtype=np.uint32
+        )
         i = 0
         row = 0
         while row < qweight.shape[0]:
@@ -226,21 +228,19 @@ class Quant3Linear(nn.Module):
             outshape[-1] = self.bias.numel()
             dtype = x.dtype
             x = x.float()
-            quant_cuda.vecquant3matmul(x, self.qweight, y, self.scales,
-                                       self.zeros)
+            quant_cuda.vecquant3matmul(x, self.qweight, y, self.scales, self.zeros)
             y = y.to(dtype)
             return y.reshape(outshape)
-        raise ValueError('Only supports a single token currently.')
+        raise ValueError("Only supports a single token currently.")
 
 
-def make_quant3(module, names, name=''):
+def make_quant3(module, names, name=""):
     if isinstance(module, Quant3Linear):
         return
     for attr in dir(module):
         tmp = getattr(module, attr)
-        name1 = name + '.' + attr if name != '' else attr
+        name1 = name + "." + attr if name != "" else attr
         if name1 in names:
-            setattr(module, attr,
-                    Quant3Linear(tmp.in_features, tmp.out_features))
+            setattr(module, attr, Quant3Linear(tmp.in_features, tmp.out_features))
     for name1, child in module.named_children():
-        make_quant3(child, names, name + '.' + name1 if name != '' else name1)
+        make_quant3(child, names, name + "." + name1 if name != "" else name1)

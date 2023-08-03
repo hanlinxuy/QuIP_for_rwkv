@@ -34,7 +34,7 @@ def preprocess(text):
     text = text.replace("”", '"')
     text = text.replace("''", '"')
     text = text.replace("``", '"')
-    return '\n' + text.strip()
+    return "\n" + text.strip()
 
 
 class LAMBADA(Task):
@@ -54,7 +54,7 @@ class LAMBADA(Task):
         pass
 
     def validation_docs(self):
-        #return self.dataset["validation"]
+        # return self.dataset["validation"]
         return self.dataset["test"]
 
     def test_docs(self):

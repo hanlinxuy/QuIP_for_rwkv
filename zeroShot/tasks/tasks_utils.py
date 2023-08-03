@@ -58,8 +58,7 @@ def acc_all(items):
 
         gold_label = doc["label"] == 1
 
-        question_scoring_dict[(paragraph_id,
-                               question_id)].append(gold_label == pred)
+        question_scoring_dict[(paragraph_id, question_id)].append(gold_label == pred)
     acc = np.mean([int(all(x)) for x in question_scoring_dict.values()])
     return acc
 
@@ -73,9 +72,11 @@ def positional_deprecated(fn):
     @functools.wraps(fn)
     def _wrapper(*args, **kwargs):
         if len(args) != 1 if inspect.ismethod(fn) else 0:
-            print(f"WARNING: using {fn.__name__} with positional arguments is "
-                  "deprecated and will be disallowed in a future version of "
-                  "lm-evaluation-harness!")
+            print(
+                f"WARNING: using {fn.__name__} with positional arguments is "
+                "deprecated and will be disallowed in a future version of "
+                "lm-evaluation-harness!"
+            )
         return fn(*args, **kwargs)
 
     return _wrapper
@@ -302,12 +303,9 @@ class Task(abc.ABC):
         return ""
 
     @positional_deprecated
-    def fewshot_context(self,
-                        doc,
-                        num_fewshot,
-                        provide_description=None,
-                        rnd=None,
-                        description=None):
+    def fewshot_context(
+        self, doc, num_fewshot, provide_description=None, rnd=None, description=None
+    ):
         """Returns a fewshot context string that is made up of a prepended description
         (if provided), the `num_fewshot` number of examples, and an appended prompt example.
 
@@ -331,7 +329,8 @@ class Task(abc.ABC):
         assert not provide_description, (
             "The `provide_description` arg will be removed in future versions. To prepend "
             "a custom description to the context, supply the corresponding string via the "
-            "`description` arg.")
+            "`description` arg."
+        )
         if provide_description is not None:
             # nudge people to not specify it at all
             print(
@@ -348,32 +347,38 @@ class Task(abc.ABC):
                 fewshotex = self.fewshot_examples(k=num_fewshot, rnd=rnd)
             else:
                 if self._fewshot_docs is None:
-                    self._fewshot_docs = list(self.validation_docs(
-                    ) if self.has_validation_docs() else self.test_docs())
+                    self._fewshot_docs = list(
+                        self.validation_docs()
+                        if self.has_validation_docs()
+                        else self.test_docs()
+                    )
 
                 fewshotex = rnd.sample(self._fewshot_docs, num_fewshot + 1)
 
                 # get rid of the doc that's the one we're evaluating, if it's in the fewshot
                 fewshotex = [x for x in fewshotex if x != doc][:num_fewshot]
 
-            labeled_examples = ("\n\n".join([
-                self.doc_to_text(doc) + self.doc_to_target(doc)
-                for doc in fewshotex
-            ]) + "\n\n")
+            labeled_examples = (
+                "\n\n".join(
+                    [
+                        self.doc_to_text(doc) + self.doc_to_target(doc)
+                        for doc in fewshotex
+                    ]
+                )
+                + "\n\n"
+            )
 
         example = self.doc_to_text(doc)
         return description + labeled_examples + example
 
 
 class MultipleChoiceTask(Task):
-
     def doc_to_target(self, doc):
         return " " + doc["choices"][doc["gold"]]
 
     def construct_requests(self, doc, ctx):
         lls = [
-            rf.loglikelihood(ctx, " {}".format(choice))[0]
-            for choice in doc["choices"]
+            rf.loglikelihood(ctx, " {}".format(choice))[0] for choice in doc["choices"]
         ]
 
         return lls
@@ -404,7 +409,6 @@ class MultipleChoiceTask(Task):
 
 
 class PerplexityTask(Task, abc.ABC):
-
     def should_decontaminate(self):
         """Whether this task supports decontamination against model training set."""
         return True
@@ -416,12 +420,9 @@ class PerplexityTask(Task, abc.ABC):
         assert k == 0
         return []
 
-    def fewshot_context(self,
-                        doc,
-                        num_fewshot,
-                        provide_description=None,
-                        rnd=None,
-                        description=None):
+    def fewshot_context(
+        self, doc, num_fewshot, provide_description=None, rnd=None, description=None
+    ):
         assert (
             num_fewshot == 0
         ), "The number of fewshot examples must be 0 for perplexity tasks."
@@ -431,7 +432,8 @@ class PerplexityTask(Task, abc.ABC):
         assert not provide_description, (
             "The `provide_description` arg will be removed in future versions. To prepend "
             "a custom description to the context, supply the corresponding string via the "
-            "`description` arg.")
+            "`description` arg."
+        )
         if provide_description is not None:
             # nudge people to not specify it at all
             print(
@@ -462,7 +464,7 @@ class PerplexityTask(Task, abc.ABC):
         return req
 
     def process_results(self, doc, results):
-        (loglikelihood, ) = results
+        (loglikelihood,) = results
         words = self.count_words(doc)
         bytes_ = self.count_bytes(doc)
         return {
@@ -489,9 +491,7 @@ class PerplexityTask(Task, abc.ABC):
 
 
 class RequestFactory:
-
     def __getattr__(self, attr):
-
         def fn(*args):
             return Request(attr, args)
 
@@ -506,11 +506,11 @@ REQUEST_RETURN_LENGTHS = {
 
 
 class Request:
-
     def __init__(self, request_type, args, index=None):
         if request_type not in REQUEST_RETURN_LENGTHS.keys():
             raise NotImplementedError(
-                "The request type {} is not implemented!".format(request_type))
+                "The request type {} is not implemented!".format(request_type)
+            )
 
         self.request_type = request_type
         self.args = args
@@ -518,20 +518,21 @@ class Request:
 
     def __iter__(self):
         if REQUEST_RETURN_LENGTHS[self.request_type] is None:
-            raise IndexError(
-                "This request type does not return multiple arguments!")
+            raise IndexError("This request type does not return multiple arguments!")
         for i in range(REQUEST_RETURN_LENGTHS[self.request_type]):
             yield Request(self.request_type, self.args, i)
 
     def __getitem__(self, i):
         if REQUEST_RETURN_LENGTHS[self.request_type] is None:
-            raise IndexError(
-                "This request type does not return multiple arguments!")
+            raise IndexError("This request type does not return multiple arguments!")
         return Request(self.request_type, self.args, i)
 
     def __eq__(self, other):
-        return (self.request_type == other.request_type
-                and self.args == other.args and self.index == other.index)
+        return (
+            self.request_type == other.request_type
+            and self.args == other.args
+            and self.index == other.index
+        )
 
     def __repr__(self):
         return f"Req_{self.request_type}{self.args}[{self.index}]\n"

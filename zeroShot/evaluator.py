@@ -15,9 +15,10 @@ from datautils import get_loaders
 
 @positional_deprecated
 def simple_evaluate(
-        # model,
-        args,
-        tasks_list=[]):
+    # model,
+    args,
+    tasks_list=[],
+):
     """Instantiate and evaluate a model on a list of tasks.
     :param args: Optional[str]
         args for the zeroShot tasks
@@ -36,17 +37,15 @@ def simple_evaluate(
     lm = models.get_model(args.model).create_from_arg_string({"args": args})
 
     if args.load:
-        print('Loading checkpoint from {}...'.format(args.load))
+        print("Loading checkpoint from {}...".format(args.load))
         lm.model.load_state_dict(torch.load(args.load))
     else:
         if args.wbits < 16 and not args.nearest:
-
             tick = time.time()
-            dataloader, testloader = get_loaders(args.dataset,
-                                                seed=args.seed,
-                                                model=args.model,
-                                                seqlen=lm.seqlen)
-            if 'opt' in args.model:
+            dataloader, testloader = get_loaders(
+                args.dataset, seed=args.seed, model=args.model, seqlen=lm.seqlen
+            )
+            if "opt" in args.model:
                 quantizers = lm.opt_sequential(dataloader)
             else:
                 quantizers = lm.bloom_sequential(dataloader)
@@ -93,8 +92,11 @@ def evaluate(
         Dictionary of results
     """
 
-    task_dict_items = [(name, task) for name, task in task_dict.items()
-                       if (task.has_validation_docs() or task.has_test_docs())]
+    task_dict_items = [
+        (name, task)
+        for name, task in task_dict.items()
+        if (task.has_validation_docs() or task.has_test_docs())
+    ]
 
     results = collections.defaultdict(dict)
     versions = collections.defaultdict(dict)
@@ -126,8 +128,7 @@ def evaluate(
             task_set = "val"  # Required for caching in the decontamination
             task_doc_func = task.validation_docs
         else:
-            raise RuntimeError(
-                "Task has neither test_docs nor validation_docs")
+            raise RuntimeError("Task has neither test_docs nor validation_docs")
 
         # deterministically shuffle docs and chop off the first `limit` because sometimes docs are in some kind of order
         task_docs = list(task_doc_func())
@@ -138,12 +139,10 @@ def evaluate(
         description = ""
 
         for doc_id, doc in enumerate(itertools.islice(task_docs, 0, None)):
-
             docs[(task_name, doc_id)] = doc
-            ctx = task.fewshot_context(doc=doc,
-                                       num_fewshot=num_fewshot,
-                                       rnd=rnd,
-                                       description=description)
+            ctx = task.fewshot_context(
+                doc=doc, num_fewshot=num_fewshot, rnd=rnd, description=description
+            )
             reqs = task.construct_requests(doc, ctx)
             if not isinstance(reqs, (list, tuple)):
                 reqs = [reqs]
@@ -151,15 +150,13 @@ def evaluate(
                 requests[req.request_type].append(req)
                 # i: index in requests for a single task instance
                 # doc_id: unique id that we can get back to a doc using `docs`
-                requests_origin[req.request_type].append(
-                    (i, task_name, doc, doc_id))
+                requests_origin[req.request_type].append((i, task_name, doc, doc_id))
 
     # all responses for each (task, doc)
     process_res_queue = collections.defaultdict(list)
 
     # execute each type of request
     for reqtype, reqs in requests.items():
-
         # TODO: right now, this code runs multiple separate LM requests for multiple Requests differing
         #       only in index. We could implement some kind of caching, but that would be more of a band-aid
         #       solution. we could also implement some kind of auto-grouping here;
@@ -168,11 +165,9 @@ def evaluate(
         print("Running", reqtype, "requests")
         resps = getattr(lm, reqtype)([req.args for req in reqs])
         resps = [
-            x if req.index is None else x[req.index]
-            for x, req in zip(resps, reqs)
+            x if req.index is None else x[req.index] for x, req in zip(resps, reqs)
         ]
-        for resp, (i, task_name, doc, doc_id) in zip(resps,
-                                                     requests_origin[reqtype]):
+        for resp, (i, task_name, doc, doc_id) in zip(resps, requests_origin[reqtype]):
             process_res_queue[(task_name, doc_id)].append((i, resp))
 
     vals = collections.defaultdict(list)
@@ -195,15 +190,16 @@ def evaluate(
         real_metric = metric  # key when looking up the metric with task.aggregation
         if metric.endswith(decontaminate_suffix):
             real_metric = metric.replace(
-                decontaminate_suffix,
-                "")  # decontaminated still uses the same metric
+                decontaminate_suffix, ""
+            )  # decontaminated still uses the same metric
         results[task_name][metric] = task.aggregation()[real_metric](items)
 
         # hotfix: bleu, chrf, ter seem to be really expensive to bootstrap
         # so we run them less iterations. still looking for a cleaner way to do this
 
         stderr = metrics.stderr_for_metric(
-            metric=task.aggregation()[real_metric], bootstrap_iters=1000)
+            metric=task.aggregation()[real_metric], bootstrap_iters=1000
+        )
 
         if stderr is not None:
             results[task_name][metric + "_stderr"] = stderr(items)

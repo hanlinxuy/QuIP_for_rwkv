@@ -14,7 +14,6 @@ torch.backends.cudnn.allow_tf32 = False
 
 
 class TrueOBS:
-
     def __init__(self, layer):
         self.layer = layer
         self.dev = self.layer.weight.device
@@ -36,15 +35,18 @@ class TrueOBS:
             inp = inp.unsqueeze(0)
         tmp = inp.shape[0]
         if isinstance(self.layer, nn.Linear) or isinstance(
-                self.layer, transformers.Conv1D):
+            self.layer, transformers.Conv1D
+        ):
             if len(inp.shape) == 3:
                 inp = inp.reshape((-1, inp.shape[-1]))
             inp = inp.t()
         if isinstance(self.layer, nn.Conv2d):
-            unfold = nn.Unfold(self.layer.kernel_size,
-                               dilation=self.layer.dilation,
-                               padding=self.layer.padding,
-                               stride=self.layer.stride)
+            unfold = nn.Unfold(
+                self.layer.kernel_size,
+                dilation=self.layer.dilation,
+                padding=self.layer.padding,
+                stride=self.layer.stride,
+            )
             inp = unfold(inp)
             inp = inp.permute([1, 0, 2])
             inp = inp.flatten(1)
@@ -55,11 +57,7 @@ class TrueOBS:
         # self.H += 2 / self.nsamples * inp.matmul(inp.t())
         self.H += inp.matmul(inp.t())
 
-    def fasterquant(self,
-                    blocksize=128,
-                    percdamp=.01,
-                    sparseout=False,
-                    nearest=False):
+    def fasterquant(self, blocksize=128, percdamp=0.01, sparseout=False, nearest=False):
         W = self.layer.weight.data.clone()
         if isinstance(self.layer, nn.Conv2d):
             W = W.flatten(1)
@@ -105,7 +103,7 @@ class TrueOBS:
             H = torch.linalg.cholesky(H, upper=True)
             Hinv = H
 
-        outlier = .25 * (self.quantizer.scale**2).flatten()
+        outlier = 0.25 * (self.quantizer.scale**2).flatten()
         tot = 0
 
         for i1 in range(0, self.columns, blocksize):
@@ -125,14 +123,17 @@ class TrueOBS:
                 # if (i1 + i) % 512 == 0:
                 #     self.quantizer.find_params(W[:, (i1 + i):(i1 + i + 512)], weight=True)
 
-                q = quantize(w.unsqueeze(1), self.quantizer.scale,
-                             self.quantizer.zero,
-                             self.quantizer.maxq).flatten()
+                q = quantize(
+                    w.unsqueeze(1),
+                    self.quantizer.scale,
+                    self.quantizer.zero,
+                    self.quantizer.maxq,
+                ).flatten()
                 Q1[:, i] = q
-                Losses1[:, i] = (w - q)**2 / d**2
+                Losses1[:, i] = (w - q) ** 2 / d**2
 
                 if sparseout:
-                    sel = (w - q)**2 > outlier
+                    sel = (w - q) ** 2 > outlier
                     Losses1[sel, i] = 0
                     q[sel] = w[sel]
                     Q1[sel, i] = q[sel]
@@ -140,9 +141,7 @@ class TrueOBS:
 
                 err1 = (w - q) / d
                 if not nearest:
-                    W1[:,
-                       i:] -= err1.unsqueeze(1).matmul(Hinv1[i,
-                                                             i:].unsqueeze(0))
+                    W1[:, i:] -= err1.unsqueeze(1).matmul(Hinv1[i, i:].unsqueeze(0))
                 Err1[:, i] = err1
 
             Q[:, i1:i2] = Q1
@@ -154,20 +153,21 @@ class TrueOBS:
             if DEBUG:
                 self.layer.weight.data[:, :i2] = Q[:, :i2]
                 self.layer.weight.data[:, i2:] = W[:, i2:]
-                print(torch.sum((self.layer(self.inp1) - self.out1)**2))
+                print(torch.sum((self.layer(self.inp1) - self.out1) ** 2))
                 print(torch.sum(Losses))
 
         torch.cuda.synchronize()
         print(tot / W.numel())
-        print('time %.2f' % (time.time() - tick))
-        print('error', torch.sum(Losses).item())
+        print("time %.2f" % (time.time() - tick))
+        print("error", torch.sum(Losses).item())
 
         if isinstance(self.layer, transformers.Conv1D):
             Q = Q.t()
         self.layer.weight.data = Q.reshape(self.layer.weight.shape).to(
-            self.layer.weight.data.dtype)
+            self.layer.weight.data.dtype
+        )
         if DEBUG:
-            print(torch.sum((self.layer(self.inp1) - self.out1)**2))
+            print(torch.sum((self.layer(self.inp1) - self.out1) ** 2))
 
     def free(self):
         if DEBUG:

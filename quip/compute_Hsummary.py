@@ -15,6 +15,7 @@ import pickle
 # matrix rank of H
 # compute ||eigenvector||_1 / sqrt{n}
 
+
 def Hsummary(H, percdamp=0.01):
     assert H.shape[0] == H.shape[1]
     n = H.shape[0]
@@ -30,9 +31,10 @@ def Hsummary(H, percdamp=0.01):
     mu = torch.linalg.matrix_norm(Q) * np.sqrt(n)
     return a, k00, k01, mu
 
+
 def collect(dirname, savename):
     a_ls, k00_ls, k01_ls, mu_ls = [], [], [], []
-    for fname in tqdm(glob.glob(dirname+'/*.pt')):
+    for fname in tqdm(glob.glob(dirname + "/*.pt")):
         H = torch.load(fname)
         print(f"{fname}, H.shape: {H.shape}")
         a, k00, k01, mu = Hsummary(H)
@@ -48,13 +50,17 @@ def collect(dirname, savename):
     print(f"matrix rank rtol=0.00: {np.mean(k00_ls)} (+/- {np.std(k00_ls)})")
     print(f"matrix rank rtol=0.01: {np.mean(k01_ls)} (+/- {np.std(k01_ls)})")
     print(f"incoherency mu: {np.mean(mu_ls)} (+/- {np.std(mu_ls)})")
-    with open(savename, 'wb') as f:
-        pickle.dump({
-            'trDtrH': a_ls,
-            'rank_rtol0': k00_ls,
-            'rank_rtol01': k01_ls,
-            'incoh_mu': mu_ls
-        }, f)
+    with open(savename, "wb") as f:
+        pickle.dump(
+            {
+                "trDtrH": a_ls,
+                "rank_rtol0": k00_ls,
+                "rank_rtol01": k01_ls,
+                "incoh_mu": mu_ls,
+            },
+            f,
+        )
+
 
 p1 = [
     "slurm/H_run2/opt-125m_gptq_W4_preproc1",
@@ -69,18 +75,19 @@ p2 = [
     "slurm/H_opt-2.7b_run1/opt-2.7b_gptq_W4_preproc2",
 ]
 
+
 def save_spectrum(fname, savename):
-    """ slurm/Hspectrum/...
-    """
+    """slurm/Hspectrum/..."""
     H = torch.load(fname)
     n = H.shape[0]
     percdamp = 0.01
     damp = percdamp * torch.mean(torch.diag(H))
     diag = torch.arange(n)
-    H[diag, diag] += damp 
+    H[diag, diag] += damp
     L = torch.linalg.eigvalsh(H).numpy()
     L = pd.DataFrame(L)
     L.to_csv(savename)
+
 
 def kick_spectrum():
     # save_spectrum(
@@ -101,23 +108,20 @@ def kick_spectrum():
     #     )
     save_spectrum(
         "slurm/H_run2/opt-2.7b_gptq_W4_preproc1/H_model.decoder.layers.16.self_attn.k_proj.pt",
-        "slurm/Hspectrum/opt-2.7b_16kproj_preproc1.csv"
-        )
+        "slurm/Hspectrum/opt-2.7b_16kproj_preproc1.csv",
+    )
     save_spectrum(
         "slurm/H_run2/opt-2.7b_gptq_W4_preproc1/H_model.decoder.layers.30.fc1.pt",
-        "slurm/Hspectrum/opt-2.7b_30fc1_preproc1.csv"
-        )
-    
+        "slurm/Hspectrum/opt-2.7b_30fc1_preproc1.csv",
+    )
 
 
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dirname',
-                        type=str)
-    parser.add_argument('--savename',
-                        type=str)
+    parser.add_argument("--dirname", type=str)
+    parser.add_argument("--savename", type=str)
     args = parser.parse_args()
 
     collect(args.dirname, args.savename)

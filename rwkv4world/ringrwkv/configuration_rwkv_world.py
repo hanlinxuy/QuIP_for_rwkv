@@ -21,9 +21,7 @@ from transformers.utils import logging
 
 logger = logging.get_logger(__name__)
 
-RWKV_PRETRAINED_CONFIG_ARCHIVE_MAP = {
-    
-}
+RWKV_PRETRAINED_CONFIG_ARCHIVE_MAP = {}
 
 
 class RwkvConfig(PretrainedConfig):
@@ -87,7 +85,7 @@ class RwkvConfig(PretrainedConfig):
     model_type = "rwkv"
     attribute_map = {"max_position_embeddings": "context_length"}
 
-    def __init__( #1.5B World
+    def __init__(  # 1.5B World
         self,
         vocab_size=65536,
         context_length=1024,
@@ -107,8 +105,12 @@ class RwkvConfig(PretrainedConfig):
         self.context_length = context_length
         self.hidden_size = hidden_size
         self.num_hidden_layers = num_hidden_layers
-        self.attention_hidden_size = attention_hidden_size if attention_hidden_size is not None else hidden_size
-        self.intermediate_size = intermediate_size if intermediate_size is not None else 4 * hidden_size
+        self.attention_hidden_size = (
+            attention_hidden_size if attention_hidden_size is not None else hidden_size
+        )
+        self.intermediate_size = (
+            intermediate_size if intermediate_size is not None else 4 * hidden_size
+        )
         self.layer_norm_epsilon = layer_norm_epsilon
         self.rescale_every = rescale_every
         self.use_cache = use_cache
@@ -117,5 +119,8 @@ class RwkvConfig(PretrainedConfig):
         self.eos_token_id = eos_token_id
 
         super().__init__(
-            tie_word_embeddings=tie_word_embeddings, bos_token_id=bos_token_id, eos_token_id=eos_token_id, **kwargs
+            tie_word_embeddings=tie_word_embeddings,
+            bos_token_id=bos_token_id,
+            eos_token_id=eos_token_id,
+            **kwargs,
         )

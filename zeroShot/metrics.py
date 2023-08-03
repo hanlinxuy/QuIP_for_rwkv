@@ -13,12 +13,12 @@ def mean(arr):
 
 def pop_stddev(arr):
     mu = mean(arr)
-    return math.sqrt(sum([(x - mu)**2 for x in arr]) / len(arr))
+    return math.sqrt(sum([(x - mu) ** 2 for x in arr]) / len(arr))
 
 
 def sample_stddev(arr):
     mu = mean(arr)
-    return math.sqrt(sum([(x - mu)**2 for x in arr]) / (len(arr) - 1))
+    return math.sqrt(sum([(x - mu) ** 2 for x in arr]) / (len(arr) - 1))
 
 
 def mean_stderr(arr):
@@ -59,8 +59,7 @@ def acc_all(items):
 
         gold_label = doc["label"] == 1
 
-        question_scoring_dict[(paragraph_id,
-                               question_id)].append(gold_label == pred)
+        question_scoring_dict[(paragraph_id, question_id)].append(gold_label == pred)
     acc = np.mean([int(all(x)) for x in question_scoring_dict.values()])
     return acc
 
@@ -191,7 +190,6 @@ def _sacreformat(refs, preds):
 
 
 class _bootstrap_internal:
-
     def __init__(self, f, n):
         self.f = f
         self.n = n
@@ -222,11 +220,11 @@ def bootstrap_stderr(f, xs, iters):
 
     print("bootstrapping for stddev:", f.__name__)
     for bootstrap in tqdm(
-            pool.imap(
-                _bootstrap_internal(f, chunk_size),
-                [(i, xs) for i in range(iters // chunk_size)],
-            ),
-            total=iters // chunk_size,
+        pool.imap(
+            _bootstrap_internal(f, chunk_size),
+            [(i, xs) for i in range(iters // chunk_size)],
+        ),
+        total=iters // chunk_size,
     ):
         # sample w replacement
         res.extend(bootstrap)

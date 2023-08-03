@@ -60,9 +60,9 @@ class Lambada(datasets.GeneratorBasedBuilder):
     VERSION = datasets.Version("0.0.1")
 
     BUILDER_CONFIGS = [
-        datasets.BuilderConfig(name="original",
-                               version=VERSION,
-                               description="The LAMBADA dataset"),
+        datasets.BuilderConfig(
+            name="original", version=VERSION, description="The LAMBADA dataset"
+        ),
         datasets.BuilderConfig(
             name="en",
             version=VERSION,
@@ -93,9 +93,11 @@ class Lambada(datasets.GeneratorBasedBuilder):
     DEFAULT_CONFIG_NAME = "original"
 
     def _info(self):
-        features = datasets.Features({
-            "text": datasets.Value("string"),
-        })
+        features = datasets.Features(
+            {
+                "text": datasets.Value("string"),
+            }
+        )
         return datasets.DatasetInfo(
             description=f"{_DESCRIPTION}\n{self.config.description}",
             features=features,

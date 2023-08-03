@@ -35,7 +35,7 @@ class StoryCloze(Task):
     DATASET_PATH = "story_cloze"
     DATASET_NAME = None
 
-    def __init__(self, data_dir: str = 'tasks/local_datasets/storyCloze2018'):
+    def __init__(self, data_dir: str = "tasks/local_datasets/storyCloze2018"):
         """
         StoryCloze is not publicly available. You must download the data by
         following https://cs.rochester.edu/nlp/rocstories/ and pass the folder
@@ -65,23 +65,27 @@ class StoryCloze(Task):
         return self.dataset["test"]
 
     def doc_to_text(self, doc):
-        return " ".join([
-            doc["input_sentence_1"],
-            doc["input_sentence_2"],
-            doc["input_sentence_3"],
-            doc["input_sentence_4"],
-        ])
+        return " ".join(
+            [
+                doc["input_sentence_1"],
+                doc["input_sentence_2"],
+                doc["input_sentence_3"],
+                doc["input_sentence_4"],
+            ]
+        )
 
     def should_decontaminate(self):
         return True
 
     def doc_to_decontamination_query(self, doc):
-        return " ".join([
-            doc["input_sentence_1"],
-            doc["input_sentence_2"],
-            doc["input_sentence_3"],
-            doc["input_sentence_4"],
-        ])
+        return " ".join(
+            [
+                doc["input_sentence_1"],
+                doc["input_sentence_2"],
+                doc["input_sentence_3"],
+                doc["input_sentence_4"],
+            ]
+        )
 
     def doc_to_target(self, doc):
         clozes = [doc["sentence_quiz1"], doc["sentence_quiz2"]]
@@ -99,9 +103,7 @@ class StoryCloze(Task):
             part of the document for `doc`.
         """
         clozes = [doc["sentence_quiz1"], doc["sentence_quiz2"]]
-        lls = [
-            rf.loglikelihood(ctx, " {}".format(choice))[0] for choice in clozes
-        ]
+        lls = [rf.loglikelihood(ctx, " {}".format(choice))[0] for choice in clozes]
         return lls
 
     def process_results(self, doc, results):

@@ -48,7 +48,9 @@ _HOMEPAGE = "https://zenodo.org/record/2630551#.X4Xzn5NKjUI"
 # TODO: Add the licence for the dataset here if you can find it
 _LICENSE = "Modified MIT"
 
-_BASE_URL = "https://huggingface.co/datasets/EleutherAI/lambada_openai/resolve/main/data"
+_BASE_URL = (
+    "https://huggingface.co/datasets/EleutherAI/lambada_openai/resolve/main/data"
+)
 
 _URLS = {
     "default": f"{_BASE_URL}/lambada_test.jsonl",
@@ -60,7 +62,7 @@ _URLS = {
 }
 
 
-#class LambadaOpenAI(datasets.GeneratorBasedBuilder):
+# class LambadaOpenAI(datasets.GeneratorBasedBuilder):
 class Lambada(datasets.GeneratorBasedBuilder):
     """LAMBADA is a dataset to evaluate the capabilities of computational models for text understanding by means of a word prediction task."""
 

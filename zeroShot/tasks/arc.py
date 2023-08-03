@@ -41,8 +41,7 @@ class ARCEasy(MultipleChoiceTask):
 
     def training_docs(self):
         if self._training_docs is None:
-            self._training_docs = list(
-                map(self._process_doc, self.dataset["train"]))
+            self._training_docs = list(map(self._process_doc, self.dataset["train"]))
         return self._training_docs
 
     def validation_docs(self):
@@ -55,8 +54,7 @@ class ARCEasy(MultipleChoiceTask):
         # NOTE: Some `doc["answerKey"]`s are in numeric string format being one
         # of {'1', '2', '3', '4', '5'}. We map them back to letters.
         num_to_letter = {"1": "A", "2": "B", "3": "C", "4": "D", "5": "E"}
-        doc["answerKey"] = num_to_letter.get(doc["answerKey"],
-                                             doc["answerKey"])
+        doc["answerKey"] = num_to_letter.get(doc["answerKey"], doc["answerKey"])
         out_doc = {
             "id": doc["id"],
             "query": "Question: " + doc["question"] + "\nAnswer:",
