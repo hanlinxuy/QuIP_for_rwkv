@@ -1,6 +1,9 @@
 # QuiP for rwkv
 This is a repo aiming to apply quip to rwkv (especially world serial models).
 
+# Env
+export PYTHONPATH=$PYTHONPATH:$(pwd)
+
 # TODO LIST:
 - [ ] refactor codes.
 - [ ] rerun the quip + rwkv world experiment based on ringrwkv package. 

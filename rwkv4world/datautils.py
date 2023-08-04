@@ -13,9 +13,9 @@ def get_wikitext2(nsamples, seed, seqlen, model):
     traindata = load_dataset("wikitext", "wikitext-2-raw-v1", split="train")
     testdata = load_dataset("wikitext", "wikitext-2-raw-v1", split="test")
 
-    from transformers import AutoTokenizer
+    from ringrwkv.wrapped_tokenizer import FakeRWKVTokenier
 
-    tokenizer = AutoTokenizer.from_pretrained(model, use_fast=False)
+    tokenizer = FakeRWKVTokenier(FakeRWKVTokenier)
     trainenc = tokenizer("\n\n".join(traindata["text"]), return_tensors="pt")
     testenc = tokenizer("\n\n".join(testdata["text"]), return_tensors="pt")
 
@@ -39,9 +39,9 @@ def get_ptb(nsamples, seed, seqlen, model):
     traindata = load_dataset("ptb_text_only", "penn_treebank", split="train")
     valdata = load_dataset("ptb_text_only", "penn_treebank", split="validation")
 
-    from transformers import AutoTokenizer
+    from ringrwkv.wrapped_tokenizer import FakeRWKVTokenier
 
-    tokenizer = AutoTokenizer.from_pretrained(model, use_fast=False)
+    tokenizer = FakeRWKVTokenier(FakeRWKVTokenier)
     trainenc = tokenizer("\n\n".join(traindata["sentence"]), return_tensors="pt")
     testenc = tokenizer("\n\n".join(valdata["sentence"]), return_tensors="pt")
 
@@ -77,9 +77,9 @@ def get_c4(nsamples, seed, seqlen, model):
         use_auth_token=False,
     )
 
-    from transformers import AutoTokenizer
+    from ringrwkv.wrapped_tokenizer import FakeRWKVTokenier
 
-    tokenizer = AutoTokenizer.from_pretrained(model, use_fast=False)
+    tokenizer = FakeRWKVTokenier(FakeRWKVTokenier)
 
     import random
 
@@ -128,9 +128,9 @@ def get_ptb_new(nsamples, seed, seqlen, model):
     traindata = load_dataset("ptb_text_only", "penn_treebank", split="train")
     testdata = load_dataset("ptb_text_only", "penn_treebank", split="test")
 
-    from transformers import AutoTokenizer
+    from ringrwkv.wrapped_tokenizer import FakeRWKVTokenier
 
-    tokenizer = AutoTokenizer.from_pretrained(model, use_fast=False)
+    tokenizer = FakeRWKVTokenier(FakeRWKVTokenier)
     trainenc = tokenizer(" ".join(traindata["sentence"]), return_tensors="pt")
     testenc = tokenizer(" ".join(testdata["sentence"]), return_tensors="pt")
 
@@ -164,10 +164,9 @@ def get_c4_new(nsamples, seed, seqlen, model):
         split="validation",
     )
 
-    from transformers import AutoTokenizer
+    from ringrwkv.wrapped_tokenizer import FakeRWKVTokenier
 
-    tokenizer = AutoTokenizer.from_pretrained(model, use_fast=False)
-
+    tokenizer = FakeRWKVTokenier(FakeRWKVTokenier)
     import random
 
     random.seed(seed)

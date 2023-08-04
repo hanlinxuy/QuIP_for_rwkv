@@ -322,6 +322,10 @@ class RwkvSelfAttention(nn.Module):
             1 - self.time_mix_receptance
         )
 
+        # NOTE: to make sure no overflow, while now nan caused at quantizer.
+        key = torch.clip(key, -65504, 65504)
+        value = torch.clip(value, -65504, 65504)
+
         key = self.key(key)
         value = self.value(value)
         receptance = torch.sigmoid(self.receptance(receptance))
